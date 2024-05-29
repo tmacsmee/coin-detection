@@ -183,6 +183,7 @@ def dilation(image_width, image_height, px_array):
                         break
     return new_px_array
 
+
 def erosion(image_width, image_height, px_array):
     kernel = [[0, 0, 1, 0, 0], [0, 1, 1, 1, 0], [1, 1, 1, 1, 1], [0, 1, 1, 1, 0], [0, 0, 1, 0, 0]]
     new_px_array = createInitializedGreyscalePixelArray(image_width, image_height)
@@ -195,6 +196,26 @@ def erosion(image_width, image_height, px_array):
                         new_px_array[i][j] = 0
                         break
     return new_px_array
+
+def queue_based_connected_component_labeling(image_width, image_height, px_array):
+    label_array = createInitializedGreyscalePixelArray(image_width, image_height)
+    label = 0
+    queue = []
+    for i in range(image_height):
+        for j in range(image_width):
+            if px_array[i][j] == 255 and label_array[i][j] == 0:
+                label += 1
+                queue.append((i, j))
+                label_array[i][j] = label
+                while len(queue) > 0:
+                    (x, y) = queue.pop(0)
+                    for k in range(-1, 2):
+                        for l in range(-1, 2):
+                            if x + k >= 0 and x + k < image_height and y + l >= 0 and y + l < image_width and px_array[x + k][y + l] == 255 and label_array[x + k][y + l] == 0:
+                                queue.append((x + k, y + l))
+                                label_array[x + k][y + l] = label
+    return label_array    
+
 
 # This is our code skeleton that performs the coin detection.
 def main(input_path, output_path):
@@ -245,7 +266,12 @@ def main(input_path, output_path):
     # Perform erosion 3 times
     eroded_px_array = erosion(image_width, image_height, dilated_px_array)
     eroded_px_array = erosion(image_width, image_height, eroded_px_array)
-    px_array = eroded_px_array = erosion(image_width, image_height, eroded_px_array)
+    eroded_px_array = erosion(image_width, image_height, eroded_px_array)
+
+    # Perform connected component labeling
+    px_array = label_array = queue_based_connected_component_labeling(image_width, image_height, eroded_px_array)
+    
+    
 
 
 
