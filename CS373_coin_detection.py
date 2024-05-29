@@ -120,7 +120,36 @@ def percentile_based_contrast_stretching(image_width, image_height, px_array, al
 
     return px_array
 
+def horizontal_scharr_filter(image_width, image_height, px_array):
+    scharr_filter = [[3, 0, -3], [10, 0, -10], [3, 0, -3]]
+    new_px_array = createInitializedGreyscalePixelArray(image_width, image_height)
+    for i in range(1, image_height - 1):
+        for j in range(1, image_width - 1):
+            new_px_array[i][j] = 0
+            for k in range(3):
+                for l in range(3):
+                    new_px_array[i][j] += px_array[i - 1 + k][j - 1 + l] * scharr_filter[k][l]
+            new_px_array[i][j] = new_px_array[i][j] / 32
+    return new_px_array
 
+def vertical_scharr_filter(image_width, image_height, px_array):
+    scharr_filter = [[3, 10, 3], [0, 0, 0], [-3, -10, -3]]
+    new_px_array = createInitializedGreyscalePixelArray(image_width, image_height)
+    for i in range(1, image_height - 1):
+        for j in range(1, image_width - 1):
+            new_px_array[i][j] = 0
+            for k in range(3):
+                for l in range(3):
+                    new_px_array[i][j] += px_array[i - 1 + k][j - 1 + l] * scharr_filter[k][l]
+            new_px_array[i][j] = new_px_array[i][j] / 32
+    return new_px_array
+
+def combined_scharr_filter(image_width, image_height, horizontal_scharr_px_array, vertical_scharr_px_array):
+    new_px_array = createInitializedGreyscalePixelArray(image_width, image_height)
+    for i in range(1, image_height - 1):
+        for j in range(1, image_width - 1):
+            new_px_array[i][j] = abs(vertical_scharr_px_array[i][j]) + abs(horizontal_scharr_px_array[i][j])
+    return new_px_array
 
 
 # This is our code skeleton that performs the coin detection.
@@ -140,12 +169,19 @@ def main(input_path, output_path):
     ###################################
     
     # Convert to greyscale
-    px_array = rgb_image_to_greyscale(image_width, image_height, px_array_r, px_array_g, px_array_b)
+    greyscale_px_array = rgb_image_to_greyscale(image_width, image_height, px_array_r, px_array_g, px_array_b)
     
     # Perform percentile-based contrast stretching
-    px_array = percentile_based_contrast_stretching(image_width, image_height, px_array, 0.05, 0.95)
+    contrast_stretched_px_array = percentile_based_contrast_stretching(image_width, image_height, greyscale_px_array, 0.05, 0.95)
 
-    
+    # Perform horizontal Scharr filter
+    horizontal_scharr_px_array = horizontal_scharr_filter(image_width, image_height, contrast_stretched_px_array)
+
+    # Perform vertical Scharr filter
+    vertical_scharr_px_array = vertical_scharr_filter(image_width, image_height, contrast_stretched_px_array)
+
+    # Combine horizontal and vertical Scharr filters
+    px_array = combined_scharr_filter(image_width, image_height, horizontal_scharr_px_array, vertical_scharr_px_array)
     
     
     
