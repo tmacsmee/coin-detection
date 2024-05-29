@@ -163,6 +163,38 @@ def mean_filter(image_width, image_height, px_array):
             new_px_array[i][j] = abs(sum / 25)
     return new_px_array
     
+def simple_thresholding(image_width, image_height, px_array, threshold):
+    new_px_array = createInitializedGreyscalePixelArray(image_width, image_height)
+    for i in range(image_height):
+        for j in range(image_width):
+            new_px_array[i][j] = 255 if px_array[i][j] > threshold else 0
+    return new_px_array
+
+def dilation(image_width, image_height, px_array):
+    kernel = [[0, 0, 1, 0, 0], [0, 1, 1, 1, 0], [1, 1, 1, 1, 1], [0, 1, 1, 1, 0], [0, 0, 1, 0, 0]]
+    new_px_array = createInitializedGreyscalePixelArray(image_width, image_height)
+    for i in range(2, image_height - 2):
+        for j in range(2, image_width - 2):
+            new_px_array[i][j] = 0
+            for k in range(5):
+                for l in range(5):
+                    if kernel[k][l] == 1 and px_array[i - 2 + k][j - 2 + l] == 255:
+                        new_px_array[i][j] = 255
+                        break
+    return new_px_array
+
+def erosion(image_width, image_height, px_array):
+    kernel = [[0, 0, 1, 0, 0], [0, 1, 1, 1, 0], [1, 1, 1, 1, 1], [0, 1, 1, 1, 0], [0, 0, 1, 0, 0]]
+    new_px_array = createInitializedGreyscalePixelArray(image_width, image_height)
+    for i in range(2, image_height - 2):
+        for j in range(2, image_width - 2):
+            new_px_array[i][j] = 255
+            for k in range(5):
+                for l in range(5):
+                    if kernel[k][l] == 1 and px_array[i - 2 + k][j - 2 + l] == 0:
+                        new_px_array[i][j] = 0
+                        break
+    return new_px_array
 
 # This is our code skeleton that performs the coin detection.
 def main(input_path, output_path):
@@ -195,11 +227,28 @@ def main(input_path, output_path):
     # Combine horizontal and vertical Scharr filters
     combined_scharr_px_array = combined_scharr_filter(image_width, image_height, horizontal_scharr_px_array, vertical_scharr_px_array)
     
-    # Perform mean filter 3 times n loop
+    # Perform mean filter 3 times
     mean_filtered_px_array = mean_filter(image_width, image_height, combined_scharr_px_array)
     mean_filtered_px_array = mean_filter(image_width, image_height, mean_filtered_px_array)
     mean_filtered_px_array = mean_filter(image_width, image_height, mean_filtered_px_array)
-    px_array = mean_filtered_px_array
+
+    # Perform simple thresholding
+    thresholded_px_array = simple_thresholding(image_width, image_height, mean_filtered_px_array, 22)
+
+    # Perform dilation 5 times
+    dilated_px_array = dilation(image_width, image_height, thresholded_px_array)
+    dilated_px_array = dilation(image_width, image_height, dilated_px_array)
+    dilated_px_array = dilation(image_width, image_height, dilated_px_array)
+    dilated_px_array = dilation(image_width, image_height, dilated_px_array)
+    dilated_px_array = dilation(image_width, image_height, dilated_px_array)
+
+    # Perform erosion 3 times
+    eroded_px_array = erosion(image_width, image_height, dilated_px_array)
+    eroded_px_array = erosion(image_width, image_height, eroded_px_array)
+    px_array = eroded_px_array = erosion(image_width, image_height, eroded_px_array)
+
+
+
     
     ############################################
     ### Bounding box coordinates information ###
