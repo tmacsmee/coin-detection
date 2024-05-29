@@ -66,10 +66,59 @@ def createInitializedGreyscalePixelArray(image_width, image_height, initValue = 
 ### You can add your own functions here ###
 ###########################################
 
+def rgb_image_to_greyscale(image_width, image_height, px_array_r, px_array_g, px_array_b):
+    px_array = createInitializedGreyscalePixelArray(image_width, image_height)
+    for i in range(image_height):
+        for j in range(image_width):
+            px_array[i][j] = round(0.3 * px_array_r[i][j]) + round(0.6 * px_array_g[i][j]) + round(0.1 * px_array_b[i][j])
+    return px_array
 
 
+def get_grayscale_histogram(image_width, image_height, px_array):
+    histogram = [0] * 256
+    for i in range(image_height):
+        for j in range(image_width):
+            histogram[px_array[i][j]] += 1
+    return histogram
 
+def get_cumulative_histogram(histogram):
+    cumulative_histogram = [0] * 256
+    cumulative_histogram[0] = histogram[0]
+    for i in range(1, 256):
+        cumulative_histogram[i] = cumulative_histogram[i - 1] + histogram[i]
+    return cumulative_histogram
 
+def percentile_based_contrast_stretching(image_width, image_height, px_array, alpha, beta):
+    histogram = get_grayscale_histogram(image_width, image_height, px_array)
+    cumulative_histogram = get_cumulative_histogram(histogram)
+    image_size = image_width * image_height
+    
+    # find the smallest value qa such that C(qa) is larger than alpha% of the total number of pixels
+    qa = 0
+    for i in range(256):
+        if cumulative_histogram[i] > alpha * image_size:
+            qa = i
+            break
+    
+    # find the largest value qb such that C(qb) is smaller than beta% of the total number of pixels
+    qb = 255
+    for i in range(255, -1, -1):
+        if cumulative_histogram[i] < beta * image_size:
+            qb = i
+            break
+
+    # apply the contrast stretching transformation
+    for i in range(image_height):
+        for j in range(image_width):
+            mapping = 255 / (qb - qa) * (px_array[i][j] - qa)
+            if mapping < 0:
+                px_array[i][j] = 0
+            elif mapping > 255:
+                px_array[i][j] = 255
+            else:
+                px_array[i][j] = mapping
+
+    return px_array
 
 
 
@@ -90,9 +139,12 @@ def main(input_path, output_path):
     ### STUDENT IMPLEMENTATION Here ###
     ###################################
     
+    # Convert to greyscale
+    px_array = rgb_image_to_greyscale(image_width, image_height, px_array_r, px_array_g, px_array_b)
     
-    
-    
+    # Perform percentile-based contrast stretching
+    px_array = percentile_based_contrast_stretching(image_width, image_height, px_array, 0.05, 0.95)
+
     
     
     
@@ -107,7 +159,6 @@ def main(input_path, output_path):
     ############################################
     
     bounding_box_list = [[150, 140, 200, 190]]  # This is a dummy bounding box list, please comment it out when testing your own code.
-    px_array = px_array_r
     
     fig, axs = pyplot.subplots(1, 1)
     axs.imshow(px_array, aspect='equal')
