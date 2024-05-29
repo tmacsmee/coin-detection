@@ -216,6 +216,23 @@ def queue_based_connected_component_labeling(image_width, image_height, px_array
                                 label_array[x + k][y + l] = label
     return label_array    
 
+def get_bounding_boxes(image_width, image_height, label_array, num_labels):
+    bounding_box_list = []
+    for label in range(1, num_labels + 1):
+        min_x = image_width
+        min_y = image_height
+        max_x = 0
+        max_y = 0
+        for i in range(image_height):
+            for j in range(image_width):
+                if label_array[i][j] == label:
+                    min_x = min(min_x, j)
+                    min_y = min(min_y, i)
+                    max_x = max(max_x, j)
+                    max_y = max(max_y, i)
+        bounding_box_list.append([min_x, min_y, max_x, max_y])
+    return bounding_box_list
+    
 
 # This is our code skeleton that performs the coin detection.
 def main(input_path, output_path):
@@ -271,7 +288,8 @@ def main(input_path, output_path):
     # Perform connected component labeling
     px_array = label_array = queue_based_connected_component_labeling(image_width, image_height, eroded_px_array)
     
-    
+    # Get bounding box list
+    bounding_box_list = get_bounding_boxes(image_width, image_height, label_array, 1)
 
 
 
@@ -284,7 +302,7 @@ def main(input_path, output_path):
     ### bounding_box[3] = max y
     ############################################
     
-    bounding_box_list = [[150, 140, 200, 190]]  # This is a dummy bounding box list, please comment it out when testing your own code.
+    # bounding_box_list = [[150, 140, 200, 190]]  # This is a dummy bounding box list, please comment it out when testing your own code.
     
     fig, axs = pyplot.subplots(1, 1)
     axs.imshow(px_array, aspect='equal')
