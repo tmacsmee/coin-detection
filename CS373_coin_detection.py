@@ -151,6 +151,18 @@ def combined_scharr_filter(image_width, image_height, horizontal_scharr_px_array
             new_px_array[i][j] = abs(vertical_scharr_px_array[i][j]) + abs(horizontal_scharr_px_array[i][j])
     return new_px_array
 
+# 5x5 mean filter
+def mean_filter(image_width, image_height, px_array):
+    new_px_array = createInitializedGreyscalePixelArray(image_width, image_height)
+    for i in range(2, image_height - 2):
+        for j in range(2, image_width - 2):
+            sum = 0
+            for k in range(5):
+                for l in range(5):
+                    sum += px_array[i - 2 + k][j - 2 + l]
+            new_px_array[i][j] = abs(sum / 25)
+    return new_px_array
+    
 
 # This is our code skeleton that performs the coin detection.
 def main(input_path, output_path):
@@ -181,10 +193,13 @@ def main(input_path, output_path):
     vertical_scharr_px_array = vertical_scharr_filter(image_width, image_height, contrast_stretched_px_array)
 
     # Combine horizontal and vertical Scharr filters
-    px_array = combined_scharr_filter(image_width, image_height, horizontal_scharr_px_array, vertical_scharr_px_array)
+    combined_scharr_px_array = combined_scharr_filter(image_width, image_height, horizontal_scharr_px_array, vertical_scharr_px_array)
     
-    
-    
+    # Perform mean filter 3 times n loop
+    mean_filtered_px_array = mean_filter(image_width, image_height, combined_scharr_px_array)
+    mean_filtered_px_array = mean_filter(image_width, image_height, mean_filtered_px_array)
+    mean_filtered_px_array = mean_filter(image_width, image_height, mean_filtered_px_array)
+    px_array = mean_filtered_px_array
     
     ############################################
     ### Bounding box coordinates information ###
