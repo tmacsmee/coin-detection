@@ -172,31 +172,87 @@ def simple_thresholding(image_width, image_height, px_array, threshold):
     return new_px_array
 
 def dilation(image_width, image_height, px_array):
-    kernel = [[0, 0, 1, 0, 0], [0, 1, 1, 1, 0], [1, 1, 1, 1, 1], [0, 1, 1, 1, 0], [0, 0, 1, 0, 0]]
+    kernel = [[0, 0, 1, 0, 0], 
+              [0, 1, 1, 1, 0], 
+              [1, 1, 1, 1, 1], 
+              [0, 1, 1, 1, 0], 
+              [0, 0, 1, 0, 0]]
+    
     new_px_array = createInitializedGreyscalePixelArray(image_width, image_height)
-    for i in range(2, image_height - 2):
-        for j in range(2, image_width - 2):
+    
+    for i in range(image_height):
+        for j in range(image_width):
             new_px_array[i][j] = 0
             for k in range(5):
                 for l in range(5):
-                    if kernel[k][l] == 1 and px_array[i - 2 + k][j - 2 + l] == 255:
-                        new_px_array[i][j] = 255
-                        break
+                    # Calculate the coordinates of the pixel to access
+                    ni = i + k - 2
+                    nj = j + l - 2
+                    if kernel[k][l] == 1:
+                        if 0 <= ni < image_height and 0 <= nj < image_width:
+                            # If the pixel is within bounds, check the pixel value
+                            if px_array[ni][nj] == 255:
+                                new_px_array[i][j] = 255
+                                break
+                        # No need to check for out-of-bounds pixels as they are treated as 0
+                if new_px_array[i][j] == 255:
+                    break
+    
     return new_px_array
 
 
 def erosion(image_width, image_height, px_array):
-    kernel = [[0, 0, 1, 0, 0], [0, 1, 1, 1, 0], [1, 1, 1, 1, 1], [0, 1, 1, 1, 0], [0, 0, 1, 0, 0]]
+    kernel = [[0, 0, 1, 0, 0], 
+              [0, 1, 1, 1, 0], 
+              [1, 1, 1, 1, 1], 
+              [0, 1, 1, 1, 0], 
+              [0, 0, 1, 0, 0]]
+    
     new_px_array = createInitializedGreyscalePixelArray(image_width, image_height)
-    for i in range(2, image_height - 2):
-        for j in range(2, image_width - 2):
-            new_px_array[i][j] = 255
+    
+    for i in range(image_height):
+        for j in range(image_width):
+            erosion_flag = True
             for k in range(5):
                 for l in range(5):
-                    if kernel[k][l] == 1 and px_array[i - 2 + k][j - 2 + l] == 0:
-                        new_px_array[i][j] = 0
-                        break
+                    # Calculate the coordinates of the pixel to access
+                    ni = i + k - 2
+                    nj = j + l - 2
+                    if kernel[k][l] == 1:
+                        if 0 <= ni < image_height and 0 <= nj < image_width:
+                            # If the pixel is within bounds, check the pixel value
+                            if px_array[ni][nj] == 0:
+                                erosion_flag = False
+                                break
+                        else:
+                            # If the pixel is out of bounds, treat it as 0
+                            erosion_flag = False
+                            break
+                if not erosion_flag:
+                    break
+            new_px_array[i][j] = 255 if erosion_flag else 0
+    
     return new_px_array
+
+
+# def queue_based_connected_component_labeling(image_width, image_height, px_array):
+#     label_array = createInitializedGreyscalePixelArray(image_width, image_height)
+#     label = 1
+#     queue = []
+#     for i in range(image_height):
+#         for j in range(image_width):
+#             if px_array[i][j] == 255 and label_array[i][j] == 0:
+#                 queue.append((i, j))
+#                 while len(queue) > 0:
+#                     x, y = queue.pop(0)
+#                     print(x, y)
+#                     if x < image_height - 1 and px_array[x + 1][y] == 255 and label_array[x + 1][y] == 0:
+#                         queue.append((x + 1, y))
+#                     if y > 0 and px_array[x][y - 1] == 255 and label_array[x][y - 1] == 0:
+#                         queue.append((x, y - 1))
+                
+#                 label += 1
+#     return label_array
 
 def queue_based_connected_component_labeling(image_width, image_height, px_array):
     label_array = createInitializedGreyscalePixelArray(image_width, image_height)
@@ -215,7 +271,7 @@ def queue_based_connected_component_labeling(image_width, image_height, px_array
                             if x + k >= 0 and x + k < image_height and y + l >= 0 and y + l < image_width and px_array[x + k][y + l] == 255 and label_array[x + k][y + l] == 0:
                                 queue.append((x + k, y + l))
                                 label_array[x + k][y + l] = label
-    return label_array    
+    return label_array
 
 def get_bounding_boxes(image_width, image_height, label_array, num_labels):
     bounding_box_list = []
@@ -238,7 +294,7 @@ def get_bounding_boxes(image_width, image_height, label_array, num_labels):
 # This is our code skeleton that performs the coin detection.
 def main(input_path, output_path):
     # This is the default input image, you may change the 'image_name' variable to test other images.
-    image_name = 'easy_case_3'
+    image_name = 'easy_case_6'
     input_filename = f'./Images/easy/{image_name}.png'
     if TEST_MODE:
         input_filename = input_path
@@ -274,11 +330,13 @@ def main(input_path, output_path):
     # Perform simple thresholding
     thresholded_px_array = simple_thresholding(image_width, image_height, mean_filtered_px_array, 22)
 
-    # Perform dilation 5 times
+    # Perform dilation 3 times
     dilated_px_array = dilation(image_width, image_height, thresholded_px_array)
     dilated_px_array = dilation(image_width, image_height, dilated_px_array)
     dilated_px_array = dilation(image_width, image_height, dilated_px_array)
-
+    dilated_px_array = dilation(image_width, image_height, dilated_px_array)
+    dilated_px_array = dilation(image_width, image_height, dilated_px_array)
+    
     # Perform erosion 3 times
     eroded_px_array = erosion(image_width, image_height, dilated_px_array)
     eroded_px_array = erosion(image_width, image_height, eroded_px_array)
@@ -286,9 +344,10 @@ def main(input_path, output_path):
 
     # Perform connected component labeling
     label_array = queue_based_connected_component_labeling(image_width, image_height, eroded_px_array)
-    
+    num_labels = max([max(row) for row in label_array])
+
     # Get bounding box list
-    bounding_box_list = get_bounding_boxes(image_width, image_height, label_array, 1)
+    bounding_box_list = get_bounding_boxes(image_width, image_height, label_array, num_labels)
     
     ############################################
     ### Bounding box coordinates information ###
@@ -326,7 +385,8 @@ def main(input_path, output_path):
         
         # Show image with bounding box on the screen
         image = imread(input_filename)
-        pyplot.imshow(image, cmap='gray', aspect='equal')
+        pyplot.imshow(image, aspect='equal')
+        pyplot.imshow(image, aspect='equal')
         pyplot.show()
     else:
         # Please, DO NOT change this code block!
