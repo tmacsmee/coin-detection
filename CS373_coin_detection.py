@@ -6,6 +6,7 @@ import sys
 # assignment.
 from matplotlib import pyplot
 from matplotlib.patches import Rectangle
+from matplotlib.image import imread
 
 # import our basic, light-weight png reader library
 import imageIO.png
@@ -237,7 +238,7 @@ def get_bounding_boxes(image_width, image_height, label_array, num_labels):
 # This is our code skeleton that performs the coin detection.
 def main(input_path, output_path):
     # This is the default input image, you may change the 'image_name' variable to test other images.
-    image_name = 'easy_case_1'
+    image_name = 'easy_case_3'
     input_filename = f'./Images/easy/{image_name}.png'
     if TEST_MODE:
         input_filename = input_path
@@ -277,8 +278,6 @@ def main(input_path, output_path):
     dilated_px_array = dilation(image_width, image_height, thresholded_px_array)
     dilated_px_array = dilation(image_width, image_height, dilated_px_array)
     dilated_px_array = dilation(image_width, image_height, dilated_px_array)
-    dilated_px_array = dilation(image_width, image_height, dilated_px_array)
-    dilated_px_array = dilation(image_width, image_height, dilated_px_array)
 
     # Perform erosion 3 times
     eroded_px_array = erosion(image_width, image_height, dilated_px_array)
@@ -286,13 +285,10 @@ def main(input_path, output_path):
     eroded_px_array = erosion(image_width, image_height, eroded_px_array)
 
     # Perform connected component labeling
-    px_array = label_array = queue_based_connected_component_labeling(image_width, image_height, eroded_px_array)
+    label_array = queue_based_connected_component_labeling(image_width, image_height, eroded_px_array)
     
     # Get bounding box list
     bounding_box_list = get_bounding_boxes(image_width, image_height, label_array, 1)
-
-
-
     
     ############################################
     ### Bounding box coordinates information ###
@@ -303,9 +299,10 @@ def main(input_path, output_path):
     ############################################
     
     # bounding_box_list = [[150, 140, 200, 190]]  # This is a dummy bounding box list, please comment it out when testing your own code.
-    
+    rgb_px_array = []
+    rgb_px_array.append(px_array_r)
+
     fig, axs = pyplot.subplots(1, 1)
-    axs.imshow(px_array, aspect='equal')
     
     # Loop through all bounding boxes
     for bounding_box in bounding_box_list:
@@ -328,7 +325,8 @@ def main(input_path, output_path):
         pyplot.savefig(default_output_path, bbox_inches='tight', pad_inches=0)
         
         # Show image with bounding box on the screen
-        pyplot.imshow(px_array, cmap='gray', aspect='equal')
+        image = imread(input_filename)
+        pyplot.imshow(image, cmap='gray', aspect='equal')
         pyplot.show()
     else:
         # Please, DO NOT change this code block!
