@@ -1,6 +1,7 @@
 # Built in packages
 import math
 import sys
+import os
 
 # Matplotlib will need to be installed if it isn't already. This is the only package allowed for this base part of the 
 # assignment.
@@ -10,6 +11,8 @@ from matplotlib.image import imread
 
 # import our basic, light-weight png reader library
 import imageIO.png
+import cv2
+import numpy as np
 
 # Define constant and global variables
 TEST_MODE = False    # Please, DO NOT change this variable!
@@ -74,12 +77,16 @@ def rgb_image_to_greyscale(image_width, image_height, px_array_r, px_array_g, px
             px_array[i][j] = round(0.3 * px_array_r[i][j]) + round(0.6 * px_array_g[i][j]) + round(0.1 * px_array_b[i][j])
     return px_array
 
-
 def get_grayscale_histogram(image_width, image_height, px_array):
     histogram = [0] * 256
     for i in range(image_height):
         for j in range(image_width):
-            histogram[px_array[i][j]] += 1
+            value = round(px_array[i][j])
+            if value < 0:
+                value = 0
+            elif value > 255:
+                value = 255
+            histogram[value] += 1
     return histogram
 
 def get_cumulative_histogram(histogram):
@@ -121,38 +128,18 @@ def percentile_based_contrast_stretching(image_width, image_height, px_array, al
 
     return px_array
 
-def horizontal_scharr_filter(image_width, image_height, px_array):
-    scharr_filter = [[3, 0, -3], [10, 0, -10], [3, 0, -3]]
+def laplacian_filter(image_width, image_height, px_array):
+    kernel = [[1.0, 1.0, 1.0], [1.0, -8.0, 1.0], [1.0, 1.0, 1.0]]
     new_px_array = createInitializedGreyscalePixelArray(image_width, image_height)
     for i in range(1, image_height - 1):
         for j in range(1, image_width - 1):
-            new_px_array[i][j] = 0
+            sum = 0
             for k in range(3):
                 for l in range(3):
-                    new_px_array[i][j] += px_array[i - 1 + k][j - 1 + l] * scharr_filter[k][l]
-            new_px_array[i][j] = new_px_array[i][j] / 32
+                    sum += kernel[k][l] * px_array[i - 1 + k][j - 1 + l]
+            new_px_array[i][j] = abs(sum)
     return new_px_array
 
-def vertical_scharr_filter(image_width, image_height, px_array):
-    scharr_filter = [[3, 10, 3], [0, 0, 0], [-3, -10, -3]]
-    new_px_array = createInitializedGreyscalePixelArray(image_width, image_height)
-    for i in range(1, image_height - 1):
-        for j in range(1, image_width - 1):
-            new_px_array[i][j] = 0
-            for k in range(3):
-                for l in range(3):
-                    new_px_array[i][j] += px_array[i - 1 + k][j - 1 + l] * scharr_filter[k][l]
-            new_px_array[i][j] = new_px_array[i][j] / 32
-    return new_px_array
-
-def combined_scharr_filter(image_width, image_height, horizontal_scharr_px_array, vertical_scharr_px_array):
-    new_px_array = createInitializedGreyscalePixelArray(image_width, image_height)
-    for i in range(1, image_height - 1):
-        for j in range(1, image_width - 1):
-            new_px_array[i][j] = abs(vertical_scharr_px_array[i][j]) + abs(horizontal_scharr_px_array[i][j])
-    return new_px_array
-
-# 5x5 mean filter
 def mean_filter(image_width, image_height, px_array):
     new_px_array = createInitializedGreyscalePixelArray(image_width, image_height)
     for i in range(2, image_height - 2):
@@ -170,6 +157,37 @@ def simple_thresholding(image_width, image_height, px_array, threshold):
         for j in range(image_width):
             new_px_array[i][j] = 255 if px_array[i][j] > threshold else 0
     return new_px_array
+
+def adaptive_thresholding(image_width, image_height, px_array):
+    histogram = get_grayscale_histogram(image_width, image_height, px_array)
+    
+    weighted_sum = 0
+    for i in range(len(histogram)):
+        weighted_sum += i * histogram[i]
+    theta0 = weighted_sum / (image_width * image_height)
+
+    while True:
+        theta0 = round(theta0)
+        sum_ob = 0
+        sum_bg = 0
+        weighted_sum_ob = 0
+        weighted_sum_bg = 0
+        for i in range(len(histogram)):
+            if i < theta0:
+                sum_ob += histogram[i]
+                weighted_sum_ob += i * histogram[i]
+            else:
+                sum_bg += histogram[i]
+                weighted_sum_bg += i * histogram[i]
+        mean_ob = weighted_sum_ob / sum_ob
+        mean_bg = weighted_sum_bg / sum_bg
+        mean_mean = round((mean_ob + mean_bg) / 2)
+        if theta0 == mean_mean:
+            break
+        theta0 = mean_mean
+
+    return simple_thresholding(image_width, image_height, px_array, theta0)
+    
 
 def dilation(image_width, image_height, px_array):
     kernel = [[0, 0, 1, 0, 0], 
@@ -234,26 +252,6 @@ def erosion(image_width, image_height, px_array):
     
     return new_px_array
 
-
-# def queue_based_connected_component_labeling(image_width, image_height, px_array):
-#     label_array = createInitializedGreyscalePixelArray(image_width, image_height)
-#     label = 1
-#     queue = []
-#     for i in range(image_height):
-#         for j in range(image_width):
-#             if px_array[i][j] == 255 and label_array[i][j] == 0:
-#                 queue.append((i, j))
-#                 while len(queue) > 0:
-#                     x, y = queue.pop(0)
-#                     print(x, y)
-#                     if x < image_height - 1 and px_array[x + 1][y] == 255 and label_array[x + 1][y] == 0:
-#                         queue.append((x + 1, y))
-#                     if y > 0 and px_array[x][y - 1] == 255 and label_array[x][y - 1] == 0:
-#                         queue.append((x, y - 1))
-                
-#                 label += 1
-#     return label_array
-
 def queue_based_connected_component_labeling(image_width, image_height, px_array):
     label_array = createInitializedGreyscalePixelArray(image_width, image_height)
     label = 0
@@ -287,15 +285,50 @@ def get_bounding_boxes(image_width, image_height, label_array, num_labels):
                     min_y = min(min_y, i)
                     max_x = max(max_x, j)
                     max_y = max(max_y, i)
+
+        # check bounding box is roughly square
+        top_length = max_x - min_x
+        side_length = max_y - min_y
+        threshold = 1.05
+        if top_length > threshold * side_length or side_length > threshold * top_length:
+            continue
+        
+        # check bounding box is not too small
+        min_size = 100
+        if top_length < min_size or side_length < min_size:
+            continue
+        
         bounding_box_list.append([min_x, min_y, max_x, max_y])
     return bounding_box_list
-    
+
+def detect_coin_type(image, bounding_box):
+    test_coins = os.listdir('Images/calibration')
+    highest_metric_val = 0
+    highest_coin = None
+    for coin in test_coins:
+      current_coin = cv2.imread(f'Images/calibration/{coin}', cv2.IMREAD_COLOR)
+      coin_hsv = cv2.cvtColor(current_coin, cv2.COLOR_BGR2HSV)
+      coin_hist = cv2.calcHist([coin_hsv], [0, 1], None, [180, 256], [0, 180, 0, 256])
+      cv2.normalize(coin_hist, coin_hist, 0, 255, cv2.NORM_MINMAX)
+
+      coin_in_scene = image[bounding_box[1]:bounding_box[3], bounding_box[0]:bounding_box[2]]
+      coin_in_scene_hsv = cv2.cvtColor(coin_in_scene, cv2.COLOR_BGR2HSV)
+      coin_in_scene_hist = cv2.calcHist([coin_in_scene_hsv], [0, 1], None, [180, 256], [0, 180, 0, 256])
+      cv2.normalize(coin_in_scene_hist, coin_in_scene_hist, 0, 255, cv2.NORM_MINMAX)
+
+      metric_val = cv2.compareHist(coin_hist, coin_in_scene_hist, cv2.HISTCMP_CORREL)
+      if metric_val > highest_metric_val:
+        highest_metric_val = metric_val
+        highest_coin = coin
+      
+    return highest_coin.split("_")[0]
+      
 
 # This is our code skeleton that performs the coin detection.
 def main(input_path, output_path):
     # This is the default input image, you may change the 'image_name' variable to test other images.
-    image_name = 'easy_case_1'
-    input_filename = f'./Images/easy/{image_name}.png'
+    image_name = 'hard_case_2'
+    input_filename = f'./Images/hard/{image_name}.png'
     if TEST_MODE:
         input_filename = input_path
 
@@ -306,29 +339,23 @@ def main(input_path, output_path):
     ###################################
     ### STUDENT IMPLEMENTATION Here ###
     ###################################
-    
+
     # Convert to greyscale
     greyscale_px_array = rgb_image_to_greyscale(image_width, image_height, px_array_r, px_array_g, px_array_b)
     
     # Perform percentile-based contrast stretching
     contrast_stretched_px_array = percentile_based_contrast_stretching(image_width, image_height, greyscale_px_array, 0.05, 0.95)
-
-    # Perform horizontal Scharr filter
-    horizontal_scharr_px_array = horizontal_scharr_filter(image_width, image_height, contrast_stretched_px_array)
-
-    # Perform vertical Scharr filter
-    vertical_scharr_px_array = vertical_scharr_filter(image_width, image_height, contrast_stretched_px_array)
-
-    # Combine horizontal and vertical Scharr filters
-    combined_scharr_px_array = combined_scharr_filter(image_width, image_height, horizontal_scharr_px_array, vertical_scharr_px_array)
+    
+    # Perform Laplacian filter
+    laplacian_px_array = laplacian_filter(image_width, image_height, contrast_stretched_px_array)
     
     # Perform mean filter 3 times
-    mean_filtered_px_array = mean_filter(image_width, image_height, combined_scharr_px_array)
+    mean_filtered_px_array = mean_filter(image_width, image_height, laplacian_px_array)
     mean_filtered_px_array = mean_filter(image_width, image_height, mean_filtered_px_array)
     mean_filtered_px_array = mean_filter(image_width, image_height, mean_filtered_px_array)
 
-    # Perform simple thresholding
-    thresholded_px_array = simple_thresholding(image_width, image_height, mean_filtered_px_array, 22)
+    # Perform adaptive thresholding using histogram method
+    thresholded_px_array = adaptive_thresholding(image_width, image_height, mean_filtered_px_array)
 
     # Perform dilation 5 times
     dilated_px_array = dilation(image_width, image_height, thresholded_px_array)
@@ -350,7 +377,19 @@ def main(input_path, output_path):
 
     # Get bounding box list
     bounding_box_list = get_bounding_boxes(image_width, image_height, label_array, num_labels)
-    
+    print(f'Number of coins: {len(bounding_box_list)}')
+
+    # sort bounding boxes by area
+    bounding_box_list.sort(key=lambda x: (x[2] - x[0]) * (x[3] - x[1]), reverse=True)
+
+    # Detect coin types
+    coin_type_list = []
+    image = cv2.imread(input_filename, cv2.IMREAD_COLOR)
+    for bounding_box in bounding_box_list:
+        coin_type = detect_coin_type(image, bounding_box)
+        coin_type_list.append(coin_type)
+        
+
     ############################################
     ### Bounding box coordinates information ###
     ### bounding_box[0] = min x
@@ -362,6 +401,7 @@ def main(input_path, output_path):
     fig, axs = pyplot.subplots(1, 1)
     
     # Loop through all bounding boxes
+    coin_type_index = 0
     for bounding_box in bounding_box_list:
         bbox_min_x = bounding_box[0]
         bbox_min_y = bounding_box[1]
@@ -373,17 +413,19 @@ def main(input_path, output_path):
         bbox_height = bbox_max_y - bbox_min_y
         rect = Rectangle(bbox_xy, bbox_width, bbox_height, linewidth=2, edgecolor='r', facecolor='none')
         axs.add_patch(rect)
-        
+        axs.text(bbox_min_x, bbox_min_y, coin_type_list[coin_type_index], fontsize=12, color='b')
+        coin_type_index += 1
+
     pyplot.axis('off')
     pyplot.tight_layout()
     default_output_path = f'./output_images/{image_name}_with_bbox.png'
     if not TEST_MODE:
         # Saving output image to the above directory
         image = imread(input_filename)
-        # pyplot.imshow(image, aspect='equal')
-        pyplot.imshow(thresholded_px_array, aspect='equal', cmap="gray")
+        pyplot.imshow(image, aspect='equal')
+        # pyplot.imshow(canny_px_array, aspect='equal', cmap="gray")
         pyplot.savefig(default_output_path, bbox_inches='tight', pad_inches=0)
-        
+
         # Show image with bounding box on the screen
         pyplot.show()
     else:
