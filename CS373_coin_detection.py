@@ -273,7 +273,8 @@ def queue_based_connected_component_labeling(image_width, image_height, px_array
                                 label_array[x + k][y + l] = label
     return label_array
 
-def get_bounding_boxes(image_width, image_height, label_array, num_labels):
+def get_bounding_boxes(image_width, image_height, label_array):
+    num_labels = max([max(row) for row in label_array])
     bounding_box_list = []
     for label in range(1, num_labels + 1):
         min_x = image_width
@@ -294,7 +295,7 @@ def get_bounding_boxes(image_width, image_height, label_array, num_labels):
 # This is our code skeleton that performs the coin detection.
 def main(input_path, output_path):
     # This is the default input image, you may change the 'image_name' variable to test other images.
-    image_name = 'easy_case_1'
+    image_name = 'easy_case_5'
     input_filename = f'./Images/easy/{image_name}.png'
     if TEST_MODE:
         input_filename = input_path
@@ -346,10 +347,10 @@ def main(input_path, output_path):
 
     # Perform connected component labeling
     label_array = queue_based_connected_component_labeling(image_width, image_height, eroded_px_array)
-    num_labels = max([max(row) for row in label_array])
+    
 
     # Get bounding box list
-    bounding_box_list = get_bounding_boxes(image_width, image_height, label_array, num_labels)
+    bounding_box_list = get_bounding_boxes(image_width, image_height, label_array)
     
     ############################################
     ### Bounding box coordinates information ###

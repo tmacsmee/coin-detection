@@ -11,6 +11,8 @@ from matplotlib.image import imread
 
 # import our basic, light-weight png reader library
 import imageIO.png
+
+# extras
 import cv2
 import numpy as np
 
@@ -301,28 +303,115 @@ def get_bounding_boxes(image_width, image_height, label_array, num_labels):
         bounding_box_list.append([min_x, min_y, max_x, max_y])
     return bounding_box_list
 
-def detect_coin_type(image, bounding_box):
+def get_bounding_box_area(bounding_box):
+    return (bounding_box[2] - bounding_box[0]) * (bounding_box[3] - bounding_box[1])
+
+def get_calibration_image_data():
     test_coins = os.listdir('Images/calibration')
-    highest_metric_val = 0
-    highest_coin = None
+    histograms = {}
     for coin in test_coins:
-      current_coin = cv2.imread(f'Images/calibration/{coin}', cv2.IMREAD_COLOR)
-      coin_hsv = cv2.cvtColor(current_coin, cv2.COLOR_BGR2HSV)
-      coin_hist = cv2.calcHist([coin_hsv], [0, 1], None, [180, 256], [0, 180, 0, 256])
-      cv2.normalize(coin_hist, coin_hist, 0, 255, cv2.NORM_MINMAX)
+        current_coin = cv2.imread(f'Images/calibration/{coin}', cv2.IMREAD_COLOR)
+        coin_hsv = cv2.cvtColor(current_coin, cv2.COLOR_BGR2HSV)
+        coin_hist = cv2.calcHist([coin_hsv], [0, 1], None, [180, 256], [0, 180, 0, 256])
+        cv2.normalize(coin_hist, coin_hist, 0, 255, cv2.NORM_MINMAX)
+        histograms[coin] = coin_hist
 
-      coin_in_scene = image[bounding_box[1]:bounding_box[3], bounding_box[0]:bounding_box[2]]
-      coin_in_scene_hsv = cv2.cvtColor(coin_in_scene, cv2.COLOR_BGR2HSV)
-      coin_in_scene_hist = cv2.calcHist([coin_in_scene_hsv], [0, 1], None, [180, 256], [0, 180, 0, 256])
-      cv2.normalize(coin_in_scene_hist, coin_in_scene_hist, 0, 255, cv2.NORM_MINMAX)
+    return histograms
 
-      metric_val = cv2.compareHist(coin_hist, coin_in_scene_hist, cv2.HISTCMP_CORREL)
-      if metric_val > highest_metric_val:
-        highest_metric_val = metric_val
-        highest_coin = coin
-      
-    return highest_coin.split("_")[0]
-      
+def detect_coin_types(input_filename, bounding_box_list):
+    image = cv2.imread(input_filename, cv2.IMREAD_COLOR)
+    detected_coin_types = []
+
+    calibration_histograms = get_calibration_image_data()
+    
+    # Calculate areas of all bounding boxes
+    bounding_box_areas = [get_bounding_box_area(bbox) for bbox in bounding_box_list]
+    
+    for i, bounding_box in enumerate(bounding_box_list):
+        metrics = []
+        for coin in calibration_histograms:
+            coin_hist = calibration_histograms[coin]
+
+            coin_in_scene = image[bounding_box[1]:bounding_box[3], bounding_box[0]:bounding_box[2]]
+            coin_in_scene_hsv = cv2.cvtColor(coin_in_scene, cv2.COLOR_BGR2HSV)
+            coin_in_scene_hist = cv2.calcHist([coin_in_scene_hsv], [0, 1], None, [180, 256], [0, 180, 0, 256])
+            cv2.normalize(coin_in_scene_hist, coin_in_scene_hist, 0, 255, cv2.NORM_MINMAX)
+
+            metric_val = cv2.compareHist(coin_hist, coin_in_scene_hist, cv2.HISTCMP_CORREL)
+            metrics.append([coin.split("_")[0], metric_val])
+
+        metrics.sort(key=lambda x: x[1], reverse=True)
+        weighted_metrics = {
+            "10": 0,
+            "20": 0,
+            "50": 0,
+            "1": 0,
+            "2": 0
+        }
+        for idx, metric in enumerate(metrics):
+          weighted_metrics[metric[0]] += (idx + 1) * metric[1]
+        
+        sorted_metrics = sorted(weighted_metrics.items(), key=lambda x: x[1], reverse=True)
+        
+        max_coin = metrics[0][0]
+        coin_type = max_coin
+
+        bbox_area = bounding_box_areas[i]
+
+
+        # If the detected coin type is ambiguous, use the relative size to distinguish
+        if max_coin in ["1", "2"]:
+            similar_coins = [bounding_box_areas[j] for j in range(len(detected_coin_types)) if detected_coin_types[j] in ["1", "2"]]
+            if not similar_coins:
+                coin_type = max_coin
+            elif bbox_area > max(similar_coins) * 1.1:
+                coin_type = "2"
+            else:
+                coin_type = "1"
+        elif max_coin in ["20", "50"]:
+            similar_coins = [bounding_box_areas[j] for j in range(len(detected_coin_types)) if detected_coin_types[j] in ["20", "50"]]
+            if not similar_coins:
+                coin_type = max_coin
+            elif bbox_area > max(similar_coins) * 1.1:
+                coin_type = "50"
+            else:
+                coin_type = "20"
+
+        detected_coin_types.append(coin_type)
+
+    return detected_coin_types
+
+def otsu_threshold(image_width, image_height, px_array):
+    histogram = get_grayscale_histogram(image_width, image_height, px_array)
+
+    total_pixels = image_width * image_height
+    sum_all = sum(i * histogram[i] for i in range(256))
+    
+    sum_bg = 0
+    weight_bg = 0
+    weight_obj = 0
+    max_variance = 0
+    threshold = 0
+    
+    for i in range(256):
+        weight_bg += histogram[i]
+        if weight_bg == 0:
+            continue
+        weight_obj = total_pixels - weight_bg
+        if weight_obj == 0:
+            break
+        
+        sum_bg += i * histogram[i]
+        mean_b = sum_bg / weight_bg
+        mean_f = (sum_all - sum_bg) / weight_obj
+        
+        variance_between = weight_bg * weight_obj * ((mean_b - mean_f) ** 2)
+        
+        if variance_between > max_variance:
+            max_variance = variance_between
+            threshold = i
+    
+    return threshold
 
 # This is our code skeleton that performs the coin detection.
 def main(input_path, output_path):
@@ -354,18 +443,22 @@ def main(input_path, output_path):
     mean_filtered_px_array = mean_filter(image_width, image_height, mean_filtered_px_array)
     mean_filtered_px_array = mean_filter(image_width, image_height, mean_filtered_px_array)
 
-    # Perform adaptive thresholding using histogram method
-    thresholded_px_array = adaptive_thresholding(image_width, image_height, mean_filtered_px_array)
+    otsu_threshold_value = otsu_threshold(image_width, image_height, mean_filtered_px_array)
 
-    # Perform dilation 5 times
+    # Perform adaptive thresholding using histogram method
+    thresholded_px_array = simple_thresholding(image_width, image_height, mean_filtered_px_array, otsu_threshold_value)
+
+    # Perform dilation 6 times
     dilated_px_array = dilation(image_width, image_height, thresholded_px_array)
     dilated_px_array = dilation(image_width, image_height, dilated_px_array)
     dilated_px_array = dilation(image_width, image_height, dilated_px_array)
     dilated_px_array = dilation(image_width, image_height, dilated_px_array)
     dilated_px_array = dilation(image_width, image_height, dilated_px_array)
+    dilated_px_array = dilation(image_width, image_height, dilated_px_array)
     
-    # Perform erosion 5 times
+    # Perform erosion 6 times
     eroded_px_array = erosion(image_width, image_height, dilated_px_array)
+    eroded_px_array = erosion(image_width, image_height, eroded_px_array)
     eroded_px_array = erosion(image_width, image_height, eroded_px_array)
     eroded_px_array = erosion(image_width, image_height, eroded_px_array)
     eroded_px_array = erosion(image_width, image_height, eroded_px_array)
@@ -383,13 +476,8 @@ def main(input_path, output_path):
     bounding_box_list.sort(key=lambda x: (x[2] - x[0]) * (x[3] - x[1]), reverse=True)
 
     # Detect coin types
-    coin_type_list = []
-    image = cv2.imread(input_filename, cv2.IMREAD_COLOR)
-    for bounding_box in bounding_box_list:
-        coin_type = detect_coin_type(image, bounding_box)
-        coin_type_list.append(coin_type)
+    coin_type_list = detect_coin_types(input_filename, bounding_box_list)
         
-
     ############################################
     ### Bounding box coordinates information ###
     ### bounding_box[0] = min x
@@ -413,7 +501,9 @@ def main(input_path, output_path):
         bbox_height = bbox_max_y - bbox_min_y
         rect = Rectangle(bbox_xy, bbox_width, bbox_height, linewidth=2, edgecolor='r', facecolor='none')
         axs.add_patch(rect)
-        axs.text(bbox_min_x, bbox_min_y, coin_type_list[coin_type_index], fontsize=12, color='b')
+
+        coin_type = coin_type_list[coin_type_index]
+        axs.text(bbox_min_x, bbox_min_y - 15, ("$" if coin_type in ["1", "2"] else "") + coin_type_list[coin_type_index] + ("¢" if coin_type in ["10", "20", "50"] else ""), fontsize=12, color='b')
         coin_type_index += 1
 
     pyplot.axis('off')
@@ -423,7 +513,7 @@ def main(input_path, output_path):
         # Saving output image to the above directory
         image = imread(input_filename)
         pyplot.imshow(image, aspect='equal')
-        # pyplot.imshow(canny_px_array, aspect='equal', cmap="gray")
+        # pyplot.imshow(dilated_px_array, aspect='equal', cmap="gray")
         pyplot.savefig(default_output_path, bbox_inches='tight', pad_inches=0)
 
         # Show image with bounding box on the screen
